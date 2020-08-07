@@ -1,3 +1,13 @@
+require(raster)
+require(tidyverse)
+require(devtools)
+require(sf)
+require(magrittr)
+require(ncdf4)
+require(lubridate)
+
+devtools::source_url("https://github.com/aodn/imos-user-code-library/blob/master/R/commons/NetCDF/ncParse.R?raw=TRUE")
+
 #get_sst
 
 #get_sst is a function to extract the sst given a series of Dates and points (Latitudes and Longitude). The function
