@@ -171,8 +171,9 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
 #Latitude: is the latitude of the point files in GDA94
 #Longitude is the longitude of the pont files in GDA94
 #map is a polygon map with which to screen land and non-land points in Australian lambert: 3112 is Australian Lambert (Main projected csr)
+#test indicating whether to run a test versus a full run. A test just extracts first 5 data points of each month
 
-get_hs_ws<-function(Dates, Long, Lat, map){
+get_hs_ws<-function(Dates, Long, Lat, map, test){
   
   Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
     sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>% #only extract for points on this day
@@ -200,6 +201,7 @@ get_hs_ws<-function(Dates, Long, Lat, map){
     varsize <- hs$varsize #save dimensions
     ndims <- hs$ndims
     nt <- varsize[ndims] #save length of time dimension Note: its always the last one
+    if(test = T){nt = 5}
     
     for( j in 1:nt ) { #looping through time steps in month.
       # Initialize start and count to read one timestep of the variable.
