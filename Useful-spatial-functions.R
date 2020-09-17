@@ -59,7 +59,7 @@ get_sst<- function(Dates, Long, Lat){
     dat1$z <- t( temp)
     raster <- raster( dat1$z, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
     
-    crs(raster)<- CRS('+init=EPSG:4326')#in WGS84
+    crs(raster)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
     
     #Get points ready
     temp <- Points_extraction %>% filter(Dates == ymd(Date_code[i])) %>% st_transform(4326) #only extract for points on this day
@@ -138,7 +138,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
     dat1$z <- t( temp)
     raster <- raster( dat1$z, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
     
-    crs(raster)<- CRS('+init=EPSG:4326')#in WGS84
+    crs(raster)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
     
     #Get points ready
     temp <- Points_extraction %>% filter(Dates == ymd(Date_code[i])) %>% st_transform(4326) #only extract for points on this day
@@ -245,8 +245,8 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     raster_hs <- raster( dat1$hs, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
     raster_wspeed <- raster( dat1$wspeed, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
     
-    crs(raster_hs)<- CRS('+init=EPSG:4326')#in WGS84
-    crs(raster_wspeed)<- CRS('+init=EPSG:4326')
+    crs(raster_hs)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
+    crs(raster_wspeed)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
     
     #Get points ready
     temp <- Points_extraction %>% mutate(Dates2 = str_replace(substr(Dates, 1, 7), "-", "")) %>% 
