@@ -196,8 +196,12 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     nc<-nc_open(file_URL) #open months data
     
     hs <- nc$var[[c("hs")]] #getthe variable you want
-    uwnd <- nc$var[[c("uwnd")]] #getthe variable you want
-    vwnd <- nc$var[[c("vwnd")]] #getthe variable you want
+    if(Month_code > 201306) {
+      uwnd <- nc$var[[c("uwnd")]] #getthe variable you want
+      vwnd <- nc$var[[c("vwnd")]] } else #getthe variable you want
+      uwnd <- nc$var[[c("U10")]] 
+      vwnd <- nc$var[[c("V10")]] } 
+        
     varsize <- hs$varsize #save dimensions
     ndims <- hs$ndims
     nt <- varsize[ndims] #save length of time dimension Note: its always the last one
