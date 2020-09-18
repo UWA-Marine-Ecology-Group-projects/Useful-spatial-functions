@@ -193,7 +193,12 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
                       Month_code[i], ".nc")
     
-    nc<-nc_open(file_URL) #open months data
+    while(TRUE){
+      nc<-nc_open(file_URL) #open months data
+      if(!is(nc, 'try-error')) {print("break")}
+      if(!is(nc, 'try-error')) break}
+    print(i) 
+  
     
     hs <- nc$var[[c("hs")]] #getthe variable you want
     if(Month_code[i] > 201306) {
