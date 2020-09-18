@@ -263,7 +263,7 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     temp$ws <-ifelse(is.na(temp$ws.100), ifelse(is.na(temp$ws.10000), temp$ws.100000, temp$ws.10000), temp$ws.100)
     
     if(i==1){points_extracted<-temp}else{ points_extracted<-rbind(temp,points_extracted)}
-    print[i]
+    
   }
   points_extracted %<>% st_drop_geometry()
   if( any(is.na(points_extracted$hs | points_extracted$ws))) warning('raster extract returned NA consider increasing bufffer size')
