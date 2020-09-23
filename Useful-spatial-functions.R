@@ -194,7 +194,7 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
                       Month_code[i], ".nc")
     
     while(TRUE){
-      nc<-nc_open(file_URL) #open months data
+      nc<-try(nc_open(file_URL), silent = T) #open months data
       if(!is(nc, 'try-error')) {print("break")}
       if(!is(nc, 'try-error')) break}
     print(i) 
