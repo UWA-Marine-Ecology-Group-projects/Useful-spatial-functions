@@ -216,14 +216,19 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
       # Initialize start and count to read one timestep of the variable.
       start <- rep(1,ndims) ; start[ndims] <- j
       count <- varsize ; count[ndims] <- 1
-      hs_data <- ncvar_get( nc, hs, start=start, count=count )
-      uwnd_data <- ncvar_get( nc, uwnd, start=start, count=count )
-      vwnd_data <- ncvar_get( nc, vwnd, start=start, count=count )
       
-      # Now read in the value of the timelike dimension
-      timeval <- ncvar_get( nc, hs$dim[[ndims]]$name, start=j, count=1 )
-      nc_lat <- ncvar_get( nc, hs$dim[[2]]$name)
-      nc_lon <- ncvar_get( nc, hs$dim[[1]]$name)
+      while(TRUE){
+        hs_data<-try(ncvar_get( nc, hs, start=start, count=count ), silent = T) #open months data
+        uwnd_data<-try(ncvar_get( nc, uwnd, start=start, count=count ), silent = T) #open months data
+        vwnd_data<-try(ncvar_get( nc, vwnd, start=start, count=count ), silent = T) #open months data
+        
+        # Now read in the value of the timelike dimension
+        timeval <- try(ncvar_get( nc, hs$dim[[ndims]]$name, start=j, count=1 ), silent = T)
+        nc_lat <- try(ncvar_get( nc, hs$dim[[2]]$name), silent = T)
+        nc_lon <- try(ncvar_get( nc, hs$dim[[1]]$name), silent = T)
+        
+        if(!is(hs_data, 'try-error') & !is(uwnd_data, 'try-error') &  !is(vwnd_data, 'try-error') &  !is(timeval, 'try-error') & 
+           !is(nc_lat, 'try-error') & !is(nc_lon, 'try-error')) break}
       
       dimnames(hs_data) <- list(lon=nc_lon, lat=nc_lat) ; dimnames(uwnd_data) <- list(lon=nc_lon, lat=nc_lat) 
       dimnames(vwnd_data) <- list(lon=nc_lon, lat=nc_lat)  #adding labels to matrix
