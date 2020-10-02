@@ -212,7 +212,7 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     nt <- varsize[ndims] #save length of time dimension Note: its always the last one
     if(toy == TRUE){nt = 5}
     
-    for( j in 1:nt ) { #looping through time steps in month.
+    data5 <- foreach(j = 1:5, .combine=rbind) %do% { #looping through time steps in month.
       # Initialize start and count to read one timestep of the variable.
       start <- rep(1,ndims) ; start[ndims] <- j
       count <- varsize ; count[ndims] <- 1
@@ -240,9 +240,9 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
       data_out %<>% select(lon, lat, value, wspeed) %>% rename(hs = value)
       
       data_out$time <- timeval
-      
-      if(j==1) { data5<-data_out} else{ data5<-rbind(data5, data_out)}
+      data_out
     }
+    
     data5 %<>% group_by(lon, lat) %>% summarise(hs = mean(hs), wspeed = mean(wspeed), #take average for the month
                                                 date = as.Date(as.POSIXct(min(time)*86400, origin="1990-01-01")))
     
