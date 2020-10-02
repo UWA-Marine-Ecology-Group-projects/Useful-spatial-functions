@@ -212,7 +212,7 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
     nt <- varsize[ndims] #save length of time dimension Note: its always the last one
     if(toy == TRUE){nt = 5}
     
-    data5 <- foreach(j = 1:5, .combine=rbind) %do% { #looping through time steps in month.
+    data5 <- foreach(j = 1:nt, .combine=rbind) %do% { #looping through time steps in month.
       # Initialize start and count to read one timestep of the variable.
       start <- rep(1,ndims) ; start[ndims] <- j
       count <- varsize ; count[ndims] <- 1
