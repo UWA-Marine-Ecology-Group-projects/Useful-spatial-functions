@@ -232,9 +232,9 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
       
       dimnames(hs_data) <- list(lon=nc_lon, lat=nc_lat) ; dimnames(uwnd_data) <- list(lon=nc_lon, lat=nc_lat) 
       dimnames(vwnd_data) <- list(lon=nc_lon, lat=nc_lat)  #adding labels to matrix
-      data_out <- na.omit(melt(hs_data)) 
-      data_out$uwnd<-na.omit(melt(uwnd_data))$value
-      data_out$vwnd<-na.omit(melt(vwnd_data))$value
+      data_out <- na.omit(reshape2:melt(hs_data)) 
+      data_out$uwnd<-na.omit(reshape2:melt(uwnd_data))$value
+      data_out$vwnd<-na.omit(reshape2:melt(vwnd_data))$value
       data_out$wspeed<-sqrt(data_out$value^2 + data_out$vwnd^2)
       
       data_out %<>% select(lon, lat, value, wspeed) %>% rename(hs = value)
