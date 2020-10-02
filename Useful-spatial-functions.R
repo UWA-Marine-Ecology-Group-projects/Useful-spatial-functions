@@ -243,8 +243,8 @@ get_hs_ws<-function(Dates, Long, Lat, map, toy){
       data_out
     }
     
-    data5 %<>% group_by(lon, lat) %>% summarise(hs = mean(hs), wspeed = mean(wspeed), #take average for the month
-                                                date = as.Date(as.POSIXct(min(time)*86400, origin="1990-01-01")))
+    data5<-setDT(data5)[ , .(hs = mean(hs),wspeed = mean(wspeed), date = min(time)),  by = list(lon, lat)]
+    data5$date <- as.Date(as.POSIXct(min(data5$date)*86400, origin="1990-01-01"))
     
     ## Create a raster of longitude, latitude, and temperature data
     dat1 <- list( )
