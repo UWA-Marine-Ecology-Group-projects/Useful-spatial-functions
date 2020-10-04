@@ -173,115 +173,149 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
 #map is a polygon map with which to screen land and non-land points in Australian lambert: 3112 is Australian Lambert (Main projected csr)
 #toy indicating whether to run a test versus a full run. A test just extracts first 5 data points of each month
 
-get_hs_ws<-function(Dates, Long, Lat, map, toy){
-  
-  Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
-    sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>% #only extract for points on this day
-    st_transform(3112) %>%
-    mutate(ID = row_number())
-  
-  Points %<>% mutate(land = as.integer(sf::st_intersects(geometry, map))) #returns NA for water
-  
-  Points_extraction <- Points %>% filter(is.na(land))
-  Date_code <- as.character(Points_extraction$Dates)
-  
-  Date_code %<>% str_replace_all(., "-", "") %>% unique() #Extra Date codes for each day desired
-  Month_code <- Date_code %>%  substr(., 1, 6) %>% unique() #Extra Date codes for each day desired
-  
-  for(i in 1:length(Month_code)) { #loop through months to get right data
+get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month"){
     
-    file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
-                      Month_code[i], ".nc")
+    Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
+      sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
+      st_transform(3112) %>%
+      mutate(ID = row_number())
     
-    while(TRUE){
-      nc<-try(nc_open(file_URL), silent = T) #open months data
-      if(!is(nc, 'try-error')) {print("break")}
-      if(!is(nc, 'try-error')) break}
-    print(i) 
-  
+    if(!is.null(map)){#If a map of the land area is supplied, points are filtered
+      Points %<>% mutate(land = as.integer(sf::st_intersects(geometry, map))) #returns NA for water
+      Points_extraction <- Points %>% filter(is.na(land))}else{
+        Points_extraction <- Points}
     
-    hs <- nc$var[[c("hs")]] #getthe variable you want
-    if(Month_code[i] > 201306) {
-      uwnd <- nc$var[[c("uwnd")]] #getthe variable you want
-      vwnd <- nc$var[[c("vwnd")]] } else {#getthe variable you want
-      uwnd <- nc$var[[c("U10")]] 
-      vwnd <- nc$var[[c("V10")]] } 
-        
-    varsize <- hs$varsize #save dimensions
-    ndims <- hs$ndims
-    nt <- varsize[ndims] #save length of time dimension Note: its always the last one
-    if(toy == TRUE){nt = 5}
+    Date_code <- as.character(Points_extraction$Dates) #time steps to get data for
     
-    data5 <- foreach(j = 1:nt, .combine=rbind) %do% { #looping through time steps in month.
-      # Initialize start and count to read one timestep of the variable.
-      start <- rep(1,ndims) ; start[ndims] <- j
-      count <- varsize ; count[ndims] <- 1
+    Month_code <- Date_code %>% str_replace_all(., "-", "")  %>% substr(., 1, 6) %>% unique() #Get the months to loop through
+    
+    
+    for(i in 1:length(Month_code)) { #loop through months to get right data
+      
+      file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
+                        Month_code[i], ".nc")
       
       while(TRUE){
-        hs_data<-try(ncvar_get( nc, hs, start=start, count=count ), silent = T) #open months data
-        uwnd_data<-try(ncvar_get( nc, uwnd, start=start, count=count ), silent = T) #open months data
-        vwnd_data<-try(ncvar_get( nc, vwnd, start=start, count=count ), silent = T) #open months data
+        nc<-try(nc_open(file_URL), silent = T) #open months data
+        if(!is(nc, 'try-error')) {print("break")}
+        if(!is(nc, 'try-error')) break}
+      print(i) 
+      
+      
+      hs <- nc$var[[c("hs")]] #getthe variable you want
+      if(Month_code[i] > 201306) {
+        uwnd <- nc$var[[c("uwnd")]] #getthe variable you want
+        vwnd <- nc$var[[c("vwnd")]] } else {#getthe variable you want
+          uwnd <- nc$var[[c("U10")]] 
+          vwnd <- nc$var[[c("V10")]] } 
+      
+      varsize <- hs$varsize #save dimensions
+      ndims <- hs$ndims
+      nt <- varsize[ndims] #save length of time dimension Note: its always the last one
+      if(toy == TRUE){nt = 50}
+      
+      data5 <- foreach(j = 1:nt, .combine=rbind) %do% { #looping through time steps in month.
+        # Initialize start and count to read one timestep of the variable.
+        start <- rep(1,ndims) ; start[ndims] <- j
+        count <- varsize ; count[ndims] <- 1
         
-        # Now read in the value of the timelike dimension
-        timeval <- try(ncvar_get( nc, hs$dim[[ndims]]$name, start=j, count=1 ), silent = T)
-        nc_lat <- try(ncvar_get( nc, hs$dim[[2]]$name), silent = T)
-        nc_lon <- try(ncvar_get( nc, hs$dim[[1]]$name), silent = T)
+        while(TRUE){
+          hs_data<-try(ncvar_get( nc, hs, start=start, count=count ), silent = T) #open months data
+          uwnd_data<-try(ncvar_get( nc, uwnd, start=start, count=count ), silent = T) #open months data
+          vwnd_data<-try(ncvar_get( nc, vwnd, start=start, count=count ), silent = T) #open months data
+          
+          # Now read in the value of the timelike dimension
+          timeval <- try(ncvar_get( nc, hs$dim[[ndims]]$name, start=j, count=1 ), silent = T)
+          nc_lat <- try(ncvar_get( nc, hs$dim[[2]]$name), silent = T)
+          nc_lon <- try(ncvar_get( nc, hs$dim[[1]]$name), silent = T)
+          
+          if(!is(hs_data, 'try-error') & !is(uwnd_data, 'try-error') &  !is(vwnd_data, 'try-error') &  !is(timeval, 'try-error') & 
+             !is(nc_lat, 'try-error') & !is(nc_lon, 'try-error')) break}
         
-        if(!is(hs_data, 'try-error') & !is(uwnd_data, 'try-error') &  !is(vwnd_data, 'try-error') &  !is(timeval, 'try-error') & 
-           !is(nc_lat, 'try-error') & !is(nc_lon, 'try-error')) break}
+        dimnames(hs_data) <- list(lon=nc_lon, lat=nc_lat) ; dimnames(uwnd_data) <- list(lon=nc_lon, lat=nc_lat) 
+        dimnames(vwnd_data) <- list(lon=nc_lon, lat=nc_lat)  #adding labels to matrix
+        data_out <- na.omit(reshape2::melt(hs_data)) 
+        data_out$uwnd<-na.omit(reshape2::melt(uwnd_data))$value
+        data_out$vwnd<-na.omit(reshape2::melt(vwnd_data))$value
+        data_out$wspeed<-sqrt(data_out$value^2 + data_out$vwnd^2)
+        
+        data_out %<>% select(lon, lat, value, wspeed) %>% rename(hs = value)
+        
+        data_out$time <- timeval
+        data_out
+      }
       
-      dimnames(hs_data) <- list(lon=nc_lon, lat=nc_lat) ; dimnames(uwnd_data) <- list(lon=nc_lon, lat=nc_lat) 
-      dimnames(vwnd_data) <- list(lon=nc_lon, lat=nc_lat)  #adding labels to matrix
-      data_out <- na.omit(reshape2::melt(hs_data)) 
-      data_out$uwnd<-na.omit(reshape2::melt(uwnd_data))$value
-      data_out$vwnd<-na.omit(reshape2::melt(vwnd_data))$value
-      data_out$wspeed<-sqrt(data_out$value^2 + data_out$vwnd^2)
       
-      data_out %<>% select(lon, lat, value, wspeed) %>% rename(hs = value)
+      #TAKING APPOPRIATE AVERAGES
+      if(time.scale=="month"){ #summarise for monthly data (time becomes first day of the month)
+        data5<-setDT(data5)[ , .(hs = mean(hs),wspeed = mean(wspeed), time = min(time)),  by = list(lon, lat)]
+        data5$time2<-as.POSIXct(data5$time*86400, origin="1990-01-01")
+        Extraction_times<-data5$time2[1]
+        
+        Points_extraction$Date_match<-floor_date(Points_extraction$Dates, "month")
+        
+      }
       
-      data_out$time <- timeval
-      data_out
+      if(time.scale == "daily"){ #time becomes first observation of the day
+        Extraction_times<-as.Date(Points_extraction$Dates) #get days for subsetting
+        Points_extraction$Date_match<-as.Date(Points_extraction$Dates)
+        
+        data5$time2<-as.Date(as.POSIXct(data5$time*86400, origin="1990-01-01")) #format days to match
+        data5 <- data5[data5$time2 %in% Extraction_times,  ] #subset to data for days we want
+        data5<-setDT(data5)[ , .(hs = mean(hs),wspeed = mean(wspeed)),   by = list(lon, lat, time2)]
+        
+      }
+      
+      if(time.scale == "hourly"){ 
+        data5$time2<-as.POSIXct(data5$time*86400, origin="1990-01-01")
+        #round both points and data to nearest hour
+        data5$time2<-round_date(data5$time2, "hour")
+        Extraction_times<-round_date(Points_extraction$Dates,"hour")
+        Points_extraction$Date_match<-round_date(Points_extraction$Dates,"hour")
+        #subset to required points
+        data5 <- data5[data5$time2 %in% Extraction_times,  ] #subset to data for days we want. Note data are already hourly
+      }
+      
+      #LOOPING THROUGH AND EXTRACTING DATA
+      for(k in 1:length(Extraction_times)){ 
+        
+        data6<-data5[data5$time2 == Extraction_times[k], ]
+        
+        dat1 <- list( )
+        dat1$x <- c( data6$lon)
+        dat1$y <- c( data6$lat)
+        dat1$hs <- t( data6$hs)
+        dat1$wspeed <- t( data6$wspeed)
+        raster_hs <- raster( dat1$hs, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
+        raster_wspeed <- raster( dat1$wspeed, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
+        
+        crs(raster_hs)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
+        crs(raster_wspeed)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
+        
+        #Get points ready
+        temp <- Points_extraction %>%
+          filter(Date_match == Extraction_times[k]) %>% st_transform(4326) 
+        
+        temp$hs.100<-raster::extract(raster_hs, temp, buffer = 100, fun=mean)
+        temp$hs.10000<-raster::extract(raster_hs, temp, buffer = 10000, fun=mean)
+        temp$hs.100000<-raster::extract(raster_hs, temp, buffer = 100000, fun=mean)
+        temp$hs <-ifelse(is.na(temp$hs.100), ifelse(is.na(temp$hs.10000), temp$hs.100000, temp$hs.10000), temp$hs.100)
+        
+        temp$ws.100<-raster::extract(raster_wspeed, temp, buffer = 100, fun=mean)
+        temp$ws.10000<-raster::extract(raster_wspeed, temp, buffer = 10000, fun=mean)
+        temp$ws.100000<-raster::extract(raster_wspeed, temp, buffer = 100000, fun=mean)
+        temp$ws <-ifelse(is.na(temp$ws.100), ifelse(is.na(temp$ws.10000), temp$ws.100000, temp$ws.10000), temp$ws.100)
+        
+        if(i==1 & k==1){points_extracted<-temp}else{ points_extracted<-rbind(temp,points_extracted)}
+        
+      }
     }
-    
-    data5<-setDT(data5)[ , .(hs = mean(hs),wspeed = mean(wspeed), date = min(time)),  by = list(lon, lat)]
-    data5$date <- as.Date(as.POSIXct(min(data5$date)*86400, origin="1990-01-01"))
-    
-    ## Create a raster of longitude, latitude, and temperature data
-    dat1 <- list( )
-    dat1$x <- c( data5$lon)
-    dat1$y <- c( data5$lat)
-    dat1$hs <- t( data5$hs)
-    dat1$wspeed <- t( data5$wspeed)
-    raster_hs <- raster( dat1$hs, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
-    raster_wspeed <- raster( dat1$wspeed, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
-    
-    crs(raster_hs)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
-    crs(raster_wspeed)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
-    
-    #Get points ready
-    temp <- Points_extraction %>% mutate(Dates2 = str_replace(substr(Dates, 1, 7), "-", "")) %>% 
-      filter(Dates2 == Month_code[i]) %>% st_transform(4326) #NEED TO MODIFY TO MATCH DATE TO THAT MONTHS DATA
-    
-    temp$hs.100<-raster::extract(raster_hs, temp, buffer = 100, fun=mean)
-    temp$hs.10000<-raster::extract(raster_hs, temp, buffer = 10000, fun=mean)
-    temp$hs.100000<-raster::extract(raster_hs, temp, buffer = 100000, fun=mean)
-    temp$hs <-ifelse(is.na(temp$hs.100), ifelse(is.na(temp$hs.10000), temp$hs.100000, temp$hs.10000), temp$hs.100)
-    
-    temp$ws.100<-raster::extract(raster_wspeed, temp, buffer = 100, fun=mean)
-    temp$ws.10000<-raster::extract(raster_wspeed, temp, buffer = 10000, fun=mean)
-    temp$ws.100000<-raster::extract(raster_wspeed, temp, buffer = 100000, fun=mean)
-    temp$ws <-ifelse(is.na(temp$ws.100), ifelse(is.na(temp$ws.10000), temp$ws.100000, temp$ws.10000), temp$ws.100)
-    
-    if(i==1){points_extracted<-temp}else{ points_extracted<-rbind(temp,points_extracted)}
-    
+    points_extracted %<>% st_drop_geometry()
+    if( any(is.na(points_extracted$hs | points_extracted$ws))) warning('raster extract returned NA consider increasing bufffer size')
+    Points %<>% left_join(.,points_extracted[, c("ID", "hs", "ws")], by = c("ID" = "ID"))
+    out<-list(Points$hs, Points$ws); names(out)<-c("hs", "ws")
+    out
   }
-  points_extracted %<>% st_drop_geometry()
-  if( any(is.na(points_extracted$hs | points_extracted$ws))) warning('raster extract returned NA consider increasing bufffer size')
-  Points %<>% left_join(.,points_extracted[, c("ID", "hs", "ws")], by = c("ID" = "ID"))
-  out<-list(Points$hs, Points$ws); names(out)<-c("hs", "ws")
-  out
-}
-
 
 
 
