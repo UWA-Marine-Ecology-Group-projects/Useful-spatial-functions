@@ -250,7 +250,7 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
       if(time.scale=="month"){ #summarise for monthly data (time becomes first day of the month)
         data5<-setDT(data5)[ , .(hs = mean(hs),wspeed = mean(wspeed), time = min(time)),  by = list(lon, lat)]
         data5$time2<-as.POSIXct(data5$time*86400, origin="1990-01-01")
-        Extraction_times<-as.Date(data5$time2[1])
+        Extraction_times<-data5$time2[1]
         
         Points_extraction$Date_match<-floor_date(Points_extraction$Dates, "month")
         
@@ -295,6 +295,13 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
         #Get points ready
         temp <- Points_extraction %>%
           filter(Date_match == Extraction_times[k]) %>% st_transform(4326) 
+        
+        if(time.scale=="month"){
+          temp <- Points_extraction %>%
+            filter(Date_match == as.Date(Extraction_times[k])) %>% st_transform(4326)}else{
+              temp <- Points_extraction %>%
+                filter(Date_match == Extraction_times[k]) %>% st_transform(4326) 
+              }
         
         temp$hs.100<-raster::extract(raster_hs, temp, buffer = 100, fun=mean)
         temp$hs.10000<-raster::extract(raster_hs, temp, buffer = 10000, fun=mean)
