@@ -233,12 +233,16 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
           if(!is(hs_data, 'try-error') & !is(uwnd_data, 'try-error') &  !is(vwnd_data, 'try-error') &  !is(timeval, 'try-error') & 
              !is(nc_lat, 'try-error') & !is(nc_lon, 'try-error')) break}
         
+        while(TRUE){
+        
         dimnames(hs_data) <- list(lon=nc_lon, lat=nc_lat) ; dimnames(uwnd_data) <- list(lon=nc_lon, lat=nc_lat) 
         dimnames(vwnd_data) <- list(lon=nc_lon, lat=nc_lat)  #adding labels to matrix
         data_out <- na.omit(reshape2::melt(hs_data)) 
         data_out$uwnd<-na.omit(reshape2::melt(uwnd_data))$value
         data_out$vwnd<-na.omit(reshape2::melt(vwnd_data))$value
         data_out$wspeed<-sqrt(data_out$value^2 + data_out$vwnd^2)
+        
+        if(!is.null(data_out$wspeed)) break}
         
         data_out %<>% select(lon, lat, value, wspeed) %>% rename(hs = value)
         
