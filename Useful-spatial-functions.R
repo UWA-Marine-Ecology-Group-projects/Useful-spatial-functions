@@ -240,7 +240,7 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
         data_out <- na.omit(reshape2::melt(hs_data)) 
         data_out$uwnd<-na.omit(reshape2::melt(uwnd_data))$value
         data_out$vwnd<-na.omit(reshape2::melt(vwnd_data))$value
-        data_out$wspeed<-sqrt(data_out$value^2 + data_out$vwnd^2)
+        data_out$wspeed<-sqrt(data_out$uwnd^2 + data_out$vwnd^2)
         
         if(!is.null(data_out$wspeed)) break}
         
