@@ -245,6 +245,7 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
         data_out$time <- timeval
         data_out
       }
+      nc_close(nc)
       
       
       #TAKING APPOPRIATE AVERAGES
