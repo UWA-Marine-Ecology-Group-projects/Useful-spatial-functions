@@ -203,7 +203,7 @@ get_hs_ws<-  function(Dates, Long, Lat, map=NULL, toy=FALSE, time.scale = "month
       
       
       hs <- nc$var[[c("hs")]] #getthe variable you want
-      if(Month_code[i] > 201306) {
+      if(Month_code[i] >= 201306) {
         uwnd <- nc$var[[c("uwnd")]] #getthe variable you want
         vwnd <- nc$var[[c("vwnd")]] } else {#getthe variable you want
           uwnd <- nc$var[[c("U10")]] 
