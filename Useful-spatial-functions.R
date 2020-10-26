@@ -39,7 +39,7 @@ get_sst<- function(Dates, Long, Lat){
   Date_code %<>% str_replace_all(., "-", "") %>% unique() #Extra Date codes for each day desired
   
   for(i in 1:length(Date_code)) { #loop through days download and extract data
-    
+    print(i)
     file_URL<- paste0("http://thredds.aodn.org.au/thredds/dodsC/IMOS/SRS/SST/ghrsst/L3S-6d/dn/", 
                       substr(Date_code[i], 1,4), "/", 
                       Date_code[i], 
@@ -108,6 +108,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
   
   URL_front_part <- "http://thredds.aodn.org.au/thredds/dodsC/IMOS/SRS/SST/ghrsst/L3S-1m/ngt/"
   for(i in 1:length(Date_code)) { #loop through days download and extract data
+    print(i)
     if(substr(Date_code[i], 5,6) %in% c("01", "03", "05", "07", "08", "10", "12")) {
       file_URL<- paste0(URL_front_part, substr(Date_code[i], 1,4), "/", substr(Date_code[i], 1,6), "31",
                         "152000-ABOM-L3S_GHRSST-SSTskin-AVHRR_D-1m_night.nc")}
