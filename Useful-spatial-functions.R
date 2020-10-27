@@ -177,8 +177,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
 #Latitude: is the latitude of the point files in GDA94
 #Longitude is the longitude of the pont files in GDA94
 
-get_hs_ws<- 
-  function(Dates, Long, Lat){
+get_hs_ws<- function(Dates, Long, Lat){
     
     Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
       sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
@@ -192,7 +191,7 @@ get_hs_ws<-
     
     #register for parallel computing
     avail_cores<-detectCores()
-    registerDoParallel(cores=round(avail_cores*0.8))#using 80% of the cores available
+    registerDoParallel(cores=round(avail_cores*0.5))#using 50% of the cores available
     
     points_extracted <- foreach(i = 1:length(Month_code), .combine=rbind) %dopar% { #looping through time steps in month
       
