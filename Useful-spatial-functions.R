@@ -8,6 +8,8 @@ require(lubridate)
 require(doParallel)
 require(parallel)
 require(foreach)
+require(tidync)
+
 
 
 devtools::source_url("https://github.com/aodn/imos-user-code-library/blob/master/R/commons/NetCDF/ncParse.R?raw=TRUE")
@@ -192,7 +194,7 @@ get_hs_ws<-
     avail_cores<-detectCores()
     registerDoParallel(cores=round(avail_cores*0.8))#using 80% of the cores available
     
-    points_extracted <- foreach(i = 1:2, .combine=rbind) %dopar% { #looping through time steps in month
+    points_extracted <- foreach(i = 1:length(Month_code), .combine=rbind) %dopar% { #looping through time steps in month
       
       print(i)
       
