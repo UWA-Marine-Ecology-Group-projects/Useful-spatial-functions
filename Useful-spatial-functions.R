@@ -83,20 +83,21 @@ get_sst<- function(Dates, Long, Lat){
   Points$sst
 }
 
-#get_sst
 
-#get_sst is a function to extract the sst given a series of Dates and points (Latitudes and Longitude). The function
-#returns a single column of sst corresponding to the input Dates and points.
-#sst is extracted from the AODN website and corresponds to a monthly average. This was used to minimise holes
-#and for better reach into coastal areas. SST resolution is 0.02deg. The extraction function searches for data within 
-#100 and then 10000 and then 100000m from the point. Failing that it returns a warning
-#more details on source data at: https://catalogue-imos.aodn.org.au/geonetwork/srv/api/records/023ae12a-8c0c-4abc-997a-7884f9fec9cd
-
-#ARGUMENTS
-#Dates: is a data vector (created using as.Date) with format YYYY-MM-DD
-#Latitude: is the latitude of the point files in GDA94
-#Longitude is the longitude of the pont files in GDA94
 get_sst_OneMonthAverage<- function(Dates, Long, Lat){
+  #get_sst
+  
+  #get_sst is a function to extract the sst given a series of Dates and points (Latitudes and Longitude). The function
+  #returns a single column of sst corresponding to the input Dates and points.
+  #sst is extracted from the AODN website and corresponds to a monthly average. This was used to minimise holes
+  #and for better reach into coastal areas. SST resolution is 0.02deg. The extraction function searches for data within 
+  #100 and then 10000 and then 100000m from the point. Failing that it returns a warning
+  #more details on source data at: https://catalogue-imos.aodn.org.au/geonetwork/srv/api/records/023ae12a-8c0c-4abc-997a-7884f9fec9cd
+  
+  #ARGUMENTS
+  #Dates: is a data vector (created using as.Date) with format YYYY-MM-DD
+  #Latitude: is the latitude of the point files in GDA94
+  #Longitude is the longitude of the pont files in GDA94
     
     Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
       sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>% #only extract for points on this day
@@ -106,8 +107,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
     Month_list <- unique(as.character(Points$Month))
     Month_code <- Month_list %>% str_replace_all(., "-", "") #Extra Date codes for each day desired
     
-    URL_front_part <- "http://thredds.aodn.org.au/thredds/dodsC/IMOS/SRS/SST/ghrsst/L3S-1m/ngt/"
-    
+    URL_front_part <- "http://thredds.aodn.org.au/thredds/fileServer/IMOS/SRS/SST/ghrsst/L3S-1m/ngt/"
     
     for(i in 1:length(Month_code)) { #loop through days download and extract data
       print(i)
@@ -127,52 +127,75 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
         file_URL<- paste0(URL_front_part, substr(Month_code[i], 1,4), "/", substr(Month_code[i], 1,6), "28",
                           "032000-ABOM-L3S_GHRSST-SSTskin-AVHRR_D-1m_night.nc")}
       
-      dataset <- ncParse(file_URL, variables = "sea_surface_temperature")
+      download.file(file_URL, "temp.nc", mode = 'wb') #to be saved in working directory
       
-      ## Extract data from variables and dimensions
-      lat <- dataset$dimensions$lat$data
-      lon <- dataset$dimensions$lon$data
-      temp <- dataset$variables$sea_surface_temperature$data
+      #get relevant data points
+      Points_month<-Points %>% filter(Month == Month_list[i])
       
-      ## Create a raster of longitude, latitude, and temperature data
+      #get extraction bbox (add a bit of a buffer)
+      lonrange<-c(st_bbox(Points_month)$xmin-0.5, st_bbox(Points_month)$xmax+0.5)
+      latrange<-c(st_bbox(Points_month)$ymin-0.5, st_bbox(Points_month)$ymax+0.5)
+      
+      #read in the data
+      nc<-tidync("temp.nc") #open months data
+      
+      nc_slice <- nc %>% hyper_filter(lon = lon > lonrange[1] & lon <= lonrange[2], 
+                                      lat = lat > latrange[1] & lat <= latrange[2])
+      
+      
+      nc_slice_data <- nc_slice %>% hyper_array(select_var = c("sea_surface_temperature"))
+      
+      #get sst matrix
+      sst_matrix<- apply(nc_slice_data$sea_surface_temperature, c(1,2), mean)
+      
+      #create rasters
+      trans <- attr(nc_slice_data, "transforms")
+      
+      lon <- trans$lon %>% dplyr::filter(selected)
+      lat <- trans$lat %>% dplyr::filter(selected)
+      
       dat1 <- list( )
-      dat1$x <- c( lon)
-      dat1$y <- c( lat)
-      dat1$z <- t( temp)
-      raster <- raster( dat1$z, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
+      dat1$x <- lon$lon
+      dat1$y <- lat$lat
+      dat1$z <- t(sst_matrix)
       
-      crs(raster)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
+      sst_raster=raster( dat1$z, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
+      
+      crs(sst_raster)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
       
       #Get points ready
-      temp <- Points %>% filter(Month == Month_list[i])  #only extract for points on this month
       
-      temp$sst.100<-raster::extract(raster, temp, buffer = 100, fun=mean)
-      temp$sst.10000<-raster::extract(raster, temp, buffer = 10000, fun=mean)
-      temp$sst.100000<-raster::extract(raster, temp, buffer = 100000, fun=mean)
-      temp$sst <-ifelse(is.na(temp$sst.100), ifelse(is.na(temp$sst.10000), temp$sst.100000, temp$sst.10000), temp$sst.100)
+      Points_month$sst.100<-raster::extract(sst_raster, Points_month, buffer = 100, fun=mean)
+      Points_month$sst.10000<-raster::extract(sst_raster, Points_month, buffer = 10000, fun=mean)
+      Points_month$sst.100000<-raster::extract(sst_raster, Points_month, buffer = 100000, fun=mean)
+      Points_month$sst <-ifelse(is.na(Points_month$sst.100), ifelse(is.na(Points_month$sst.10000), Points_month$sst.100000, 
+                                                                    Points_month$sst.10000), Points_month$sst.100)
       
-      if(i==1){points_extracted<-temp}else{ points_extracted<-rbind(temp,points_extracted)}
+      if(i==1){points_extracted<-Points_month}else{ points_extracted<-rbind(Points_month,points_extracted)}
     }
+    
     points_extracted %<>% st_drop_geometry() %>% arrange(ID)
     if( any(is.na(points_extracted$sst))) warning('raster extract returned NA consider increasing bufffer size')
-    Points$sst
+    
+    points_extracted$sst
   }
 
-#get_hs_ws
 
-#get_hs_ws is a function to extracts monthly mean significant wave heights and wind speeds given a series of Dates and points 
-#(Latitudes and Longitude). 
-#The function returns a a list of 2 lists (one for hs and one for ws) corresponding to the input Dates and points.
-#hs and ws is extracted from the CSIRO https://data.csiro.au/collections/#collection/CIcsiro:39819. 
-#The extraction function searches for data within 
-#100 and then 10000 and then 100000m from the point. Failing that it returns a warning
 
-#ARGUMENTS
-#Dates: is a data vector (created using as.Date) with format YYYY-MM-DD
-#Latitude: is the latitude of the point files in GDA94
-#Longitude is the longitude of the pont files in GDA94
-
-function(Dates, Long, Lat){
+get_hs_ws<- function(Dates, Long, Lat){
+  #get_hs_ws
+  
+  #get_hs_ws is a function to extracts monthly mean significant wave heights and wind speeds given a series of Dates and points 
+  #(Latitudes and Longitude). 
+  #The function returns a a list of 2 lists (one for hs and one for ws) corresponding to the input Dates and points.
+  #hs and ws is extracted from the CSIRO https://data.csiro.au/collections/#collection/CIcsiro:39819. 
+  #The extraction function searches for data within 
+  #100 and then 10000 and then 100000m from the point. Failing that it returns a warning
+  
+  #ARGUMENTS
+  #Dates: is a data vector (created using as.Date) with format YYYY-MM-DD
+  #Latitude: is the latitude of the point files in GDA94
+  #Longitude is the longitude of the pont files in GDA94
   
   Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
     sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
