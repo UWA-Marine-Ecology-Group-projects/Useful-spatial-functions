@@ -171,7 +171,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
 #Latitude: is the latitude of the point files in GDA94
 #Longitude is the longitude of the pont files in GDA94
 
-function(Dates, Long, Lat){
+get_hs_ws<- function(Dates, Long, Lat){
   
   Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
     sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
