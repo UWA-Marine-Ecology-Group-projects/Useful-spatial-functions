@@ -5,6 +5,10 @@ require(sf)
 require(magrittr)
 require(ncdf4)
 require(lubridate)
+require(doParallel)
+require(parallel)
+require(foreach)
+
 
 devtools::source_url("https://github.com/aodn/imos-user-code-library/blob/master/R/commons/NetCDF/ncParse.R?raw=TRUE")
 
@@ -171,95 +175,99 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
 #Latitude: is the latitude of the point files in GDA94
 #Longitude is the longitude of the pont files in GDA94
 
-get_hs_ws<- function(Dates, Long, Lat){
-  
-  Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
-    sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
-    st_transform(4326) %>% 
-    mutate(ID = row_number(), Month = substr(Dates, 1, 7))
-  
-  #Date_code <- as.character(Points_extraction$Dates) #time steps to get data for
-  
-  Month<-unique(Points$Month)
-  Month_code <- Month %>% str_replace_all(., "-", "") #Get the months to loop through
-  
-  
-  for(i in 1:length(Month_code)) { #loop through months to get right data
+get_hs_ws<- 
+  function(Dates, Long, Lat){
     
-    print(i)
+    Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
+      sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
+      st_transform(4326) %>% 
+      mutate(ID = row_number(), Month = substr(Dates, 1, 7))
     
-    #prepare file url
-    file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
-                      Month_code[i], ".nc")
+    #Date_code <- as.character(Points_extraction$Dates) #time steps to get data for
     
-    #get relevant data points
-    Points_month<-Points %>% filter(Month == Month[i])
+    Month<-unique(Points$Month)
+    Month_code <- Month %>% str_replace_all(., "-", "") #Get the months to loop through
     
-    #get extraction bbox (add a bit of a buffer)
-    lonrange<-c(st_bbox(Points_month)$xmin-0.5, st_bbox(Points_month)$xmax+0.5)
-    latrange<-c(st_bbox(Points_month)$ymin-0.5, st_bbox(Points_month)$ymax+0.5)
+    #register for parallel computing
+    avail_cores<-detectCores()
+    registerDoParallel(cores=round(avail_cores*0.8))#using 80% of the cores available
     
-    #read in the data
-    while(TRUE){
-      nc<-try(tidync(file_URL)) #open months data
+    points_extracted <- foreach(i = 1:2, .combine=rbind) %dopar% { #looping through time steps in month
       
-      nc_slice <- try(nc %>% hyper_filter(longitude = longitude > lonrange[1] & longitude <= lonrange[2], 
-                                          latitude = latitude > latrange[1] & latitude <= latrange[2]))
+      print(i)
       
+      #prepare file url
+      file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
+                        Month_code[i], ".nc")
+      
+      #get relevant data points
+      Points_month<-Points %>% filter(Month == Month[i])
+      
+      #get extraction bbox (add a bit of a buffer)
+      lonrange<-c(st_bbox(Points_month)$xmin-0.5, st_bbox(Points_month)$xmax+0.5)
+      latrange<-c(st_bbox(Points_month)$ymin-0.5, st_bbox(Points_month)$ymax+0.5)
+      
+      #read in the data
+      while(TRUE){
+        nc<-try(tidync(file_URL)) #open months data
+        
+        nc_slice <- try(nc %>% hyper_filter(longitude = longitude > lonrange[1] & longitude <= lonrange[2], 
+                                            latitude = latitude > latrange[1] & latitude <= latrange[2]))
+        
+        if(Month_code[i] >= 201306) {
+          nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("uwnd", "vwnd", "hs")))}else{
+            nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("U10", "V10", "hs")))}
+        
+        if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error') & length(nc_slice_data)==3) {print("break")}
+        if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error')& length(nc_slice_data)==3) break}
+      
+      
+      #get wind and wave matrix
       if(Month_code[i] >= 201306) {
-        nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("uwnd", "vwnd", "hs")))}else{
-          nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("U10", "V10", "hs")))}
+        nc_slice_data$wspeed <- sqrt(nc_slice_data$uwnd^2 + nc_slice_data$vwnd^2)}else{ #converting from vectors
+          nc_slice_data$wspeed <- sqrt(nc_slice_data$U10^2 + nc_slice_data$V10^2)} #converting from vectors
+      wind_matrix<- apply(nc_slice_data$wspeed, c(1,2), mean) #taking average over month
       
-      if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error') & length(nc_slice_data)==3) {print("break")}
-      if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error')& length(nc_slice_data)==3) break}
+      wave_matrix<- apply(nc_slice_data$hs, c(1,2), mean)
+      
+      #create rasters
+      trans <- attr(nc_slice_data, "transforms")
+      
+      lon <- trans$longitude %>% dplyr::filter(selected)
+      lat <- trans$latitude %>% dplyr::filter(selected)
+      
+      dat1 <- list( )
+      dat1$x <- lon$longitude
+      dat1$y <- lat$latitude
+      dat1$z <- wave_matrix
+      
+      wave_raster=raster(dat1)
+      
+      dat1$z <- wind_matrix
+      wind_raster=raster(dat1)
+      
+      Points_month$wave.100<-raster::extract(wave_raster, Points_month, buffer = 100, fun=mean)
+      Points_month$wave.10000<-raster::extract(wave_raster, Points_month, buffer = 10000, fun=mean)
+      Points_month$wave.100000<-raster::extract(wave_raster, Points_month, buffer = 100000, fun=mean)
+      Points_month$wave <-ifelse(is.na(Points_month$wave.100), ifelse(is.na(Points_month$wave.10000), Points_month$wave.100000, 
+                                                                      Points_month$wave.10000), Points_month$wave.100)
+      
+      Points_month$wind.100<-raster::extract(wind_raster, Points_month, buffer = 1, fun=mean)
+      Points_month$wind.10000<-raster::extract(wind_raster, Points_month, buffer = 10000, fun=mean)
+      Points_month$wind.100000<-raster::extract(wind_raster, Points_month, buffer = 100000, fun=mean)
+      Points_month$wind <-ifelse(is.na(Points_month$wind.100), ifelse(is.na(Points_month$wind.10000), Points_month$wind.100000, 
+                                                                      Points_month$wind.10000), Points_month$wind.100)
+      
+      Points_month
+      
+    }
     
+    points_extracted %<>% st_drop_geometry() %>% arrange(ID)
+    if( any(is.na(points_extracted$wave | points_extracted$wind))) warning('raster extract returned NA consider increasing bufffer size')
     
-    #get wind and wave matrix
-    if(Month_code[i] >= 201306) {
-      nc_slice_data$wspeed <- sqrt(nc_slice_data$uwnd^2 + nc_slice_data$vwnd^2)}else{ #converting from vectors
-        nc_slice_data$wspeed <- sqrt(nc_slice_data$U10^2 + nc_slice_data$V10^2)} #converting from vectors
-    wind_matrix<- apply(nc_slice_data$wspeed, c(1,2), mean) #taking average over month
-    
-    wave_matrix<- apply(nc_slice_data$hs, c(1,2), mean)
-    
-    #create rasters
-    trans <- attr(nc_slice_data, "transforms")
-    
-    lon <- trans$longitude %>% dplyr::filter(selected)
-    lat <- trans$latitude %>% dplyr::filter(selected)
-    
-    dat1 <- list( )
-    dat1$x <- lon$longitude
-    dat1$y <- lat$latitude
-    dat1$z <- wave_matrix
-    
-    wave_raster=raster(dat1)
-    
-    dat1$z <- wind_matrix
-    wind_raster=raster(dat1)
-    
-    Points_month$wave.100<-raster::extract(wave_raster, Points_month, buffer = 100, fun=mean)
-    Points_month$wave.10000<-raster::extract(wave_raster, Points_month, buffer = 10000, fun=mean)
-    Points_month$wave.100000<-raster::extract(wave_raster, Points_month, buffer = 100000, fun=mean)
-    Points_month$wave <-ifelse(is.na(Points_month$wave.100), ifelse(is.na(Points_month$wave.10000), Points_month$wave.100000, 
-                                                                    Points_month$wave.10000), Points_month$wave.100)
-    
-    Points_month$wind.100<-raster::extract(wind_raster, Points_month, buffer = 1, fun=mean)
-    Points_month$wind.10000<-raster::extract(wind_raster, Points_month, buffer = 10000, fun=mean)
-    Points_month$wind.100000<-raster::extract(wind_raster, Points_month, buffer = 100000, fun=mean)
-    Points_month$wind <-ifelse(is.na(Points_month$wind.100), ifelse(is.na(Points_month$wind.10000), Points_month$wind.100000, 
-                                                                    Points_month$wind.10000), Points_month$wind.100)
-    
-    if(i==1){points_extracted<-Points_month}else{ points_extracted<-rbind(Points_month,points_extracted)}
-    
+    out<-list(points_extracted$wave, points_extracted$wind); names(out)<-c("wave", "wind")
+    out
   }
-  
-  points_extracted %<>% st_drop_geometry() %>% arrange(ID)
-  if( any(is.na(points_extracted$wave | points_extracted$wind))) warning('raster extract returned NA consider increasing bufffer size')
-  
-  out<-list(points_extracted$wave, points_extracted$wind); names(out)<-c("wave", "wind")
-  out
-}
 
 
 
