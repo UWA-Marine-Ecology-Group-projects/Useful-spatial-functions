@@ -204,8 +204,8 @@ get_hs_ws<- function(Dates, Long, Lat){
   
   #Date_code <- as.character(Points_extraction$Dates) #time steps to get data for
   
-  Month<-unique(Points$Month)
-  Month_code <- Month %>% str_replace_all(., "-", "") #Get the months to loop through
+  Month_list<-unique(Points$Month)
+  Month_code <- Month_list %>% str_replace_all(., "-", "") #Get the months to loop through
   
   #register for parallel computing
   avail_cores<-detectCores()
@@ -220,7 +220,7 @@ get_hs_ws<- function(Dates, Long, Lat){
                       Month_code[i], ".nc")
     
     #get relevant data points
-    Points_month<-Points %>% filter(Month == Month[i])
+    Points_month<-Points %>% filter(Month == Month_list[i])
     
     #get extraction bbox (add a bit of a buffer)
     lonrange<-c(st_bbox(Points_month)$xmin-0.5, st_bbox(Points_month)$xmax+0.5)
