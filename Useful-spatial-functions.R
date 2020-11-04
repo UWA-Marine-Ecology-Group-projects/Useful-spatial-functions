@@ -160,8 +160,8 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
       dat1$z <- t(sst_matrix)
       
       sst_raster=raster( dat1$z, xmn = range( dat1[[1]])[1], xmx = range( dat1[[1]])[2], ymn = range( dat1[[2]])[1], ymx = range( dat1[[2]])[2])
-      
       crs(sst_raster)<- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')#in WGS84
+      slope_raster = raster::terrain(sst_raster, opt = "Slope", neighbors = 8)
       
       #Get points ready
       
@@ -171,14 +171,21 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
       Points_month$sst <-ifelse(is.na(Points_month$sst.100), ifelse(is.na(Points_month$sst.10000), Points_month$sst.100000, 
                                                                     Points_month$sst.10000), Points_month$sst.100)
       
+      Points_month$sst.slope.100<-raster::extract(slope_raster, Points_month, buffer = 100, fun=mean)
+      Points_month$sst.slope.10000<-raster::extract(slope_raster, Points_month, buffer = 10000, fun=mean)
+      Points_month$sst.slope.100000<-raster::extract(slope_raster, Points_month, buffer = 100000, fun=mean)
+      Points_month$sst.slope <-ifelse(is.na(Points_month$sst.slope.100), ifelse(is.na(Points_month$sst.slope.10000), Points_month$sst.slope.100000, 
+                                                                                Points_month$sst.slope.10000), Points_month$sst.slope.100)
+      
       if(i==1){points_extracted<-Points_month}else{ points_extracted<-rbind(Points_month,points_extracted)}
     }
     
     points_extracted %<>% st_drop_geometry() %>% arrange(ID)
-    if( any(is.na(points_extracted$sst))) warning('raster extract returned NA consider increasing bufffer size')
+    if( any(is.na(points_extracted$sst))| any(is.na(points_extracted$sst.slope))) warning('raster extract returned NA consider increasing bufffer size')
     
-    points_extracted$sst
-  }
+    out<-list(points_extracted$sst, points_extracted$sst.slope); names(out)<-c("sst", "sst_slope")
+    out
+}
 
 
 
