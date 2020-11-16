@@ -143,7 +143,7 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
                                       lat = lat > latrange[1] & lat <= latrange[2])
       
       
-      nc_slice_data <- nc_slice %>% hyper_array(select_var = c("sea_surface_temperature"))
+      nc_slice_data <- nc_slice %>% hyper_array(select_var = c("sea_surface_temperature"), force = T)
       
       #get sst matrix
       sst_matrix<- apply(nc_slice_data$sea_surface_temperature, c(1,2), mean)
@@ -241,8 +241,8 @@ get_hs_ws<- function(Dates, Long, Lat){
                                           latitude = latitude > latrange[1] & latitude <= latrange[2]))
       
       if(Month_code[i] >= 201306) {
-        nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("uwnd", "vwnd", "hs")))}else{
-          nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("U10", "V10", "hs")))}
+        nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("uwnd", "vwnd", "hs"), force = T))}else{
+          nc_slice_data <- try(nc_slice %>% hyper_array(select_var = c("U10", "V10", "hs"), force = T))}
       
       if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error') & length(nc_slice_data)==3) {print("break")}
       if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error')& length(nc_slice_data)==3) break}
