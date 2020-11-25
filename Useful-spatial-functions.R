@@ -222,7 +222,7 @@ get_hs_ws<- function(Dates, Long, Lat){
   registerDoSNOW(cl)
   ntasks <- 100
   pb <- tkProgressBar(max=length(Month_code))
-  progress <- function(n) setTkProgressBar(pb, n)
+  progress <- function(i) setTkProgressBar(pb, i)
   opts <- list(progress=progress)
   
   points_extracted <- foreach(i = 1:length(Month_code), .combine=rbind, .options.snow=opts) %dopar% { #looping through time steps in month
