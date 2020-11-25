@@ -9,7 +9,7 @@ require(doParallel)
 require(parallel)
 require(foreach)
 require(tidync)
-require(doSnow)
+require(doSNOW)
 require(tcltk)
 
 
