@@ -217,15 +217,17 @@ get_hs_ws<- function(Dates, Long, Lat){
   Month_code <- Month_list %>% str_replace_all(., "-", "") #Get the months to loop through
   
   #register for parallel computing
-  registerDoParallel(cores=2) #using 80% of the cores available
-  cl <- makeSOCKcluster(3)
+  cl <- makeCluster(2)
   registerDoSNOW(cl)
-  ntasks <- 100
-  pb <- tkProgressBar(max=length(Month_code))
-  progress <- function(i) setTkProgressBar(pb, i)
-  opts <- list(progress=progress)
+  iterations <- length(Month_code)
+  pb <- txtProgressBar(max = iterations, style = 3)
+  progress <- function(n) setTxtProgressBar(pb, n)
+  opts <- list(progress = progress)
   
-  points_extracted <- foreach(i = 1:length(Month_code), .combine=rbind, .options.snow=opts) %dopar% { #looping through time steps in month
+  points_extracted <- foreach(i = 1:length(Month_code), 
+                              .combine=rbind, 
+                              .packages = c('magrittr', 'dplyr', 'raster', 'sf', 'tidync'),
+                              .options.snow = opts) %dopar% { #looping through time steps in month
     
     #prepare file url
     file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
