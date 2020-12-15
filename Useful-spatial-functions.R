@@ -189,6 +189,117 @@ get_sst_OneMonthAverage<- function(Dates, Long, Lat){
     out
 }
 
+get_hs_ws_day<- function(Dates, Long, Lat){
+  
+  #get_hs_ws_day
+  
+  #get_hs_ws_day is a function to extracts monthly mean significant wave heights and wind speeds given a series of Dates and points 
+  #(Latitudes and Longitude). Data is extracted for morning: 8-10, midday: 11-1 and afternoon: 2-4
+  #The function returns a a list of 2 lists (one for hs and one for ws) corresponding to the input Dates and points.
+  #hs and ws is extracted from the CSIRO https://data.csiro.au/collections/#collection/CIcsiro:39819. 
+  #The extraction function searches for data within 
+  #100 and then 10000 and then 100000m from the point. Failing that it returns a warning
+  
+  #ARGUMENTS
+  #Dates: is a data vector (created using as.Date) with format YYYY-MM-DD
+  #Latitude: is the latitude of the point files in GDA94
+  #Longitude is the longitude of the pont files in GDA94
+  
+  Points<-tibble(Dates = Dates, Long = Long,  Lat = Lat) %>%  
+    sf::st_as_sf(coords = c("Long", "Lat"), crs = 4283) %>%
+    st_transform(4326) %>% 
+    mutate(ID = row_number(), Month = substr(Dates, 1, 7))
+  
+  #Date_code <- as.character(Points_extraction$Dates) #time steps to get data for
+  
+  Month_list<-unique(Points$Month)
+  Month_code <- Month_list %>% str_replace_all(., "-", "") #Get the months to loop through
+  
+  #register for parallel computing
+  registerDoParallel(cores=2) #using 80% of the cores available
+  
+  points_extracted <- foreach(i = 1:length(Month_code), .combine=rbind) %dopar% { #looping through time steps in month
+    
+    print(i)
+    
+    #prepare file url
+    file_URL<- paste0("http://data-cbr.csiro.au/thredds/dodsC/catch_all/CMAR_CAWCR-Wave_archive/CAWCR_Wave_Hindcast_aggregate/gridded/ww3.aus_4m.",
+                      Month_code[i], ".nc")
+    
+    #get relevant data points
+    Points_month<-Points %>% filter(Month == Month_list[i])
+    
+    #get extraction bbox (add a bit of a buffer)
+    lonrange<-c(st_bbox(Points_month)$xmin-0.5, st_bbox(Points_month)$xmax+0.5)
+    latrange<-c(st_bbox(Points_month)$ymin-0.5, st_bbox(Points_month)$ymax+0.5)
+    
+    #read in the data
+    while(TRUE){
+      nc<-try(tidync(file_URL)) #open months data
+      
+      nc_slice <- try(nc %>% hyper_filter(longitude = longitude > lonrange[1] & longitude <= lonrange[2], 
+                                          latitude = latitude > latrange[1] & latitude <= latrange[2]))
+      
+      if(Month_code[i] >= 201306) {
+        nc_slice_data <- try(nc_slice %>% hyper_tibble(select_var = c("uwnd", "vwnd", "hs"), force = T, na.rm = FALSE))}else{
+          nc_slice_data <- try(nc_slice %>% hyper_tibble(select_var = c("U10", "V10", "hs"), force = T, na.rm = FALSE))}
+      
+      if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error') & length(nc_slice_data)==6) {print("break")}
+      if(!is(nc, 'try-error') & !is(nc_slice, 'try-error') & !is(nc_slice_data, 'try-error')& length(nc_slice_data)==6) break}
+    
+    
+    #get wind and wave matrix
+    if(Month_code[i] >= 201306) {
+      nc_slice_data$wspeed <- sqrt(nc_slice_data$uwnd^2 + nc_slice_data$vwnd^2)}else{ #converting from vectors
+        nc_slice_data$wspeed <- sqrt(nc_slice_data$U10^2 + nc_slice_data$V10^2)} #converting from vectors
+    
+    #filter between 8 am and 5pm
+    nc_slice_data$time2<-as.POSIXct("1990-01-01 00:00:00") + nc_slice_data$time * 24 * 3600 +8*3600
+    nc_slice_data$time2<-round_date(nc_slice_data$time2)
+    nc_slice_data$hour <- lubridate::hour(nc_slice_data$time2)
+    nc_slice_data %<>% filter(hour >= 8, hour <=17) %>% 
+      mutate(mornAftern = ifelse(hour %in% 8:10, "morning", 
+                                 ifelse(hour %in% 11:13, "midday",
+                                        "afternoon"))) %>% 
+      group_by(longitude, latitude, mornAftern) %>% 
+      summarise(hs = mean(hs, na.rm = T), wspeed = mean(wspeed, na.rm = T)) %>% 
+      pivot_wider(names_from = mornAftern, values_from = c(hs, wspeed) )
+    
+    #create raster and extract
+    raster <- rasterFromXYZ(nc_slice_data, digits = 2, crs = crs(Points_month))
+    
+    Points_month$weather100<-raster::extract(raster, Points_month, buffer = 100, fun=mean)
+    Points_month$weather10000<-raster::extract(raster, Points_month, buffer = 10000, fun=mean)
+    Points_month$weather100000<-raster::extract(raster, Points_month, buffer = 100000, fun=mean)
+    
+    #extract lowest res data available at each site
+    vars<- colnames(Points_month$weather100)
+    extra <- matrix(NA_real_, nrow=nrow(Points_month), ncol=length(vars), dimnames=list(NULL, vars))
+    Points_month<-dplyr::bind_cols(Points_month, as.data.frame(extra))
+    
+    for(j in 1: length(vars)){
+      
+      Points_month[ , vars[j]] <- ifelse(!is.na(Points_month$weather100[,j]),Points_month$weather100[,j], #best
+                                         ifelse(!is.na(Points_month$weather10000[,j]), Points_month$weather10000[,j], #second
+                                                Points_month$weather100000[,j])) #worst
+    }
+    
+    Points_month %>% select(-c(weather100,weather10000, weather100000 ))
+  }
+  
+  points_extracted %<>% st_drop_geometry() %>% arrange(ID)
+  if( any(is.na(points_extracted$hs_midday  | points_extracted$wspeed_midday))) warning('raster extract returned NA consider increasing bufffer size')
+  
+  out<-list(points_extracted$hs_afternoon , 
+            points_extracted$hs_midday ,
+            points_extracted$hs_morning,
+            points_extracted$wspeed_afternoon,
+            points_extracted$wspeed_midday,
+            points_extracted$wspeed_morning
+  ); names(out)<-c("hs_afternoon", "hs_midday", "hs_morning","wspeed_afternoon", "wspeed_midday", "wspeed_morning")
+  out
+}
+
 
 
 get_hs_ws<- function(Dates, Long, Lat){
